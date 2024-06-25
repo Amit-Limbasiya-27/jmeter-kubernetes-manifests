@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmap-aws-script
+data:
+  entrypoint.sh: |
+    #!/bin/bash
+    current_year_month=$(TZ=Asia/Kolkata date +'%b-%Y')
+    date_time=$(TZ=Asia/Kolkata date +"D%d-T%H-%M")
+    only_date=$(TZ=Asia/Kolkata date +"%d")
+
+    # Wait for the flag file to be appear (which shows jmeter's execution done) before start uploading in aws s3 bucket.
+    while [ ! -e "/app/flag/upload_start_${PRODUCT}_${JOBTYPE}.txt" ]
+    do
+        :
+    done
+
+    # remove the flag file
+    rm "/app/flag/upload_start_${PRODUCT}_${JOBTYPE}.txt" && echo "File removed: 'flag/upload_start_${PRODUCT}_${JOBTYPE}.txt'"
+    
+
+    # if the test type is continuous-test(cron-job) then upload with it's date structure otherwise the test type is adhoc-test(job) so upload with it's date-time structure.
+    if [ "${JOBTYPE}" == "continuous-test" ]; then
+      aws s3 cp "/app/results/${PRODUCT}/${JOBTYPE}" s3://<bucket-name>/test-results/${PRODUCT}/${JOBTYPE}/$current_year_month/${only_date}/  --recursive
+    else
+      aws s3 cp "/app/results/${PRODUCT}/${JOBTYPE}" s3://<bucket-name>/test-results/${PRODUCT}/${JOBTYPE}/$current_year_month/${date_time}/  --recursive
+    fi
+
+    echo "Files uploaded successfully..."
+    exit 0

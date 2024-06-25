@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmap-jmeter-script
+data:
+  entrypoint.sh: |
+    #!/bin/bash
+    echo "Execution started of $PRODUCT $JOBTYPE..."
+    
+    #waiting for the flag file
+    while [ ! -e "/jmeter/flag/download_done_${PRODUCT}_${JOBTYPE}.txt" ]
+    do
+        :
+    done
+
+    # remove the flag file
+    rm "/jmeter/flag/download_done_${PRODUCT}_${JOBTYPE}.txt" && echo "File removed: 'flag/download_done_${PRODUCT}_${JOBTYPE}.txt'"
+    
+    echo "files downloaded from github"
+
+    # give executable permission to entrypoint.sh file
+    chmod +x "/jmeter/test-scripts/PerformanceAutomation/${PRODUCT}/${JOBTYPE}/entrypoint.sh"
+    
+    
+    #erase the current folder to avoid unnecessary file presence and avoid the extra space holding.
+    product_result_folder="/jmeter/results/${PRODUCT}/${JOBTYPE}"
+    if [ -d "$product_result_folder" ]; then
+      rm -r "$product_result_folder"
+    fi
+
+    # Made the folder structure of results folder like test-scripts folder to upload in aws s3
+    mkdir -vp jmeter/results/${PRODUCT}/${JOBTYPE}
+
+    # iterate through the github folder structure and make the similar folder structure as github in results folder.
+    for folder in "/jmeter/test-scripts/PerformanceAutomation/${PRODUCT}/${JOBTYPE}"/*; do
+      if [ -d "$folder" ]; then
+        baseFolder=$(basename "$folder")
+        mkdir -vp "${product_result_folder}/${baseFolder}"
+
+        # make the separate folder for all the jmx files as it shows the endpoint. and store results in the respective folder.
+        for file in "/jmeter/test-scripts/PerformanceAutomation/${PRODUCT}/${JOBTYPE}/${baseFolder}"/*; do
+          if [[ $file == *.jmx ]]; then
+            endpointFolder=$(basename "$file" ".jmx")
+            mkdir -v "${product_result_folder}/${baseFolder}/${endpointFolder}"
+          fi
+        done
+      fi
+    done
+
+    # Run the script     
+    /jmeter/test-scripts/PerformanceAutomation/${PRODUCT}/${JOBTYPE}/entrypoint.sh
+
+    echo "Execution completed successfully..."
+    
+    # make flag file to start uploading in aws.
+    touch "/jmeter/flag/upload_start_${PRODUCT}_${JOBTYPE}.txt" && echo "File created: 'flag/upload_start_${PRODUCT}_${JOBTYPE}.txt'"
+    exit 0

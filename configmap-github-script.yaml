@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmap-github-script
+data:
+  entrypoint.sh: |
+    #!/bin/sh
+    
+    # Set the repository URL and the target directory
+    repository_url="https://${GITHUB_TOKEN}@github.com/<repo-url-after-github.com>"
+
+    # Check if .git exists or not, if .git exists then it means repository is already cloned now we have to pull.
+    if [ -e "/jmeter/test-scripts/.git" ]
+    then  
+        git -C /jmeter/test-scripts fetch --all
+        git -C /jmeter/test-scripts reset --hard origin/master
+    else
+        git clone "${repository_url}" /jmeter/test-scripts
+    fi 
+    
+    # make the flag file to tell jmeter container to start working.
+    touch "/jmeter/flag/download_done_${PRODUCT}_${JOBTYPE}.txt" && echo "File created: 'flag/download_done_${PRODUCT}_${JOBTYPE}.txt'"
+    exit 0

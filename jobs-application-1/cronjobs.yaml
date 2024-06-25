@@ -1,0 +1,158 @@
+# Github job
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: github-cronjob-service
+spec:
+  schedule: "42 * * * *"
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      completions: 1
+      template:
+        spec: 
+          restartPolicy: OnFailure
+          containers:
+            - command:
+                - /bin/sh
+                - /github/github-script/entrypoint.sh
+              image: alpine/git:latest
+              imagePullPolicy: Never 
+              name: github
+              volumeMounts:
+                - mountPath: /jmeter/test-scripts
+                  name: test-scripts-github-repository
+                - mountPath: /jmeter/flag
+                  name: flag
+                - mountPath: /github/github-script
+                  name: github-script
+              env:
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: secrets-jmeter-github
+                      key: GITHUB_TOKEN
+                - name: PRODUCT
+                  value: application-1
+                - name: JOBTYPE
+                  value: continuous-test
+          volumes:
+            - name: test-scripts-github-repository
+              persistentVolumeClaim:
+                claimName: test-scripts-github-repository
+            - name: flag
+              persistentVolumeClaim:
+                claimName: flag
+            - name: github-script
+              configMap:
+                name: configmap-github-script
+                defaultMode: 0777
+status: {}
+---
+# Jmeter job
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: jmeter-cronjob-service
+spec:
+  schedule: "43 * * * *"
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      completions: 1
+      template:
+        spec: 
+          restartPolicy: OnFailure
+          containers:
+            - command:
+                - /bin/bash
+                - /jmeter/jmeter-script/entrypoint.sh
+              image: justb4/jmeter:latest
+              imagePullPolicy: Never 
+              name: jmeter
+              volumeMounts:
+                - mountPath: /jmeter/test-scripts
+                  name: test-scripts-github-repository
+                - mountPath: /jmeter/results
+                  name: results
+                - mountPath: /jmeter/flag
+                  name: flag
+                - mountPath: /jmeter/jmeter-script
+                  name: jmeter-script
+              env:
+                - name: PRODUCT
+                  value: application-1
+                - name: JOBTYPE
+                  value: continuous-test
+          volumes:
+            - name: test-scripts-github-repository
+              persistentVolumeClaim:
+                claimName: test-scripts-github-repository
+            - name: results
+              persistentVolumeClaim:
+                claimName: results
+            - name: flag
+              persistentVolumeClaim:
+                claimName: flag
+            - name: jmeter-script
+              configMap:
+                name: configmap-jmeter-script
+                defaultMode: 0777
+status: {}
+---
+# AWS cli job and pvc
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: awscli-cronjob-service
+spec:
+  schedule: "44 * * * *"
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      completions: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - command:
+                - "/app/aws-script/entrypoint.sh"
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: secrets-aws
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: secrets-aws
+                      key: AWS_SECRET_ACCESS_KEY
+                - name: PRODUCT
+                  value: service
+                - name: JOBTYPE
+                  value: continuous-test
+              image: amazon/aws-cli:latest
+              name: awscli
+              imagePullPolicy: Never 
+              resources: {}
+              volumeMounts:
+                - name: aws-script  
+                  mountPath: /app/aws-script/entrypoint.sh
+                  subPath: entrypoint.sh
+                - mountPath: /app/results
+                  name: results
+                - mountPath: /app/flag
+                  name: flag
+          volumes:
+            - name: aws-script
+              configMap:
+                name: configmap-aws-script
+                defaultMode: 0777
+            - name: results
+              persistentVolumeClaim:
+                claimName: results
+            - name: flag
+              persistentVolumeClaim:
+                claimName: flag
+status: {}
